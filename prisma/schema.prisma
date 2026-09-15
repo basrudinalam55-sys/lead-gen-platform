@@ -1,0 +1,299 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ServiceType {
+  GOOGLE_MAPS_LEAD_GEN
+  COMPETITOR_PRICE_MONITORING
+  SOCIAL_MEDIA_CONTENT_PIPELINE
+  WHATSAPP_AUTOMATION
+  LOCAL_SEO_GMB
+}
+
+enum ServiceStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  PENDING
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  DEMO_SCHEDULED
+  DEMO_COMPLETED
+  PROPOSAL_SENT
+  NEGOTIATING
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum OutreachChannel {
+  EMAIL
+  WHATSAPP
+  INSTAGRAM_DM
+  PHONE
+  IN_PERSON
+  LINKEDIN
+}
+
+enum TaskType {
+  LEAD_RESEARCH
+  OUTREACH
+  DEMO
+  FOLLOW_UP
+  PROPOSAL
+  ONBOARDING
+  CONTENT_CREATION
+  REPORTING
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String
+  role          String    @default("USER")
+  avatar        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  services      Service[]
+  tasks         Task[]    @relation("AssignedTasks")
+  createdTasks  Task[]    @relation("CreatedTasks")
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Service {
+  id              String        @id @default(cuid())
+  name            String
+  type            ServiceType
+  description     String        @db.Text
+  priceSetup      Int           @default(0)
+  priceMonthly    Int           @default(0)
+  currency        String        @default("NPR")
+  status          ServiceStatus @default(ACTIVE)
+  features        String[]
+  targetIndustries String[]
+  apiSources      String[]
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leads           Lead[]
+  tasks           Task[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Lead {
+  id              String      @id @default(cuid())
+  name            String
+  businessName    String?
+  email           String?
+  phone           String?
+  whatsapp        String?
+  instagram       String?
+  website         String?
+  address         String?
+  city            String?
+  country         String      @default("Nepal")
+  latitude        Float?
+  longitude       Float?
+  industry        String?
+  businessType    String?
+  source          String      @default("MANUAL")
+  status          LeadStatus  @default(NEW)
+  score           Int         @default(0)
+  tags            String[]
+  notes           String?     @db.Text
+  serviceId       String
+  service         Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  outreachLogs    OutreachLog[]
+  tasks           Task[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+}
+
+model OutreachLog {
+  id          String           @id @default(cuid())
+  leadId      String
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  channel     OutreachChannel
+  direction   String           // INBOUND / OUTBOUND
+  subject     String?
+  content     String           @db.Text
+  metadata    String?          @db.Text // JSON
+  sentAt      DateTime         @default(now())
+  deliveredAt DateTime?
+  readAt      DateTime?
+  repliedAt   DateTime?
+}
+
+model Task {
+  id          String      @id @default(cuid())
+  title       String
+  description String?     @db.Text
+  type        TaskType
+  status      TaskStatus  @default(PENDING)
+  priority    Int         @default(0)
+  dueDate     DateTime?
+  completedAt DateTime?
+  assigneeId  String?
+  assignee    User?       @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creatorId   String
+  creator     User        @relation("CreatedTasks", fields: [creatorId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  leadId      String?
+  lead        Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  metadata    String?     @db.Text // JSON
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model CompetitorPrice {
+  id            String   @id @default(cuid())
+  serviceId     String
+  service       Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  competitorName String
+  productName   String
+  productUrl    String?
+  price         Float
+  currency      String   @default("NPR")
+  availability  String?
+  metadata      String?  @db.Text
+  scrapedAt     DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
+model SocialContent {
+  id            String   @id @default(cuid())
+  serviceId     String
+  service       Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  platform      String   // INSTAGRAM, FACEBOOK, LINKEDIN, TWITTER, TIKTOK
+  contentType   String   // POST, STORY, REEL, CAROUSEL
+  caption       String?  @db.Text
+  mediaUrls     String[] // JSON array
+  hashtags      String[]
+  scheduledAt   DateTime
+  publishedAt   DateTime?
+  status        String   @default("DRAFT") // DRAFT, SCHEDULED, PUBLISHED, FAILED
+  engagement    String?  @db.Text // JSON
+  metadata      String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model GMBProfile {
+  id              String   @id @default(cuid())
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  placeId         String   @unique
+  businessName    String
+  address         String
+  phone           String?
+  website         String?
+  category        String
+  rating          Float?
+  reviewCount     Int?
+  latitude        Float?
+  longitude       Float?
+  hours           String?  @db.Text // JSON
+  photos          String[] // JSON array
+  verified        Boolean  @default(false)
+  optimizationScore Int    @default(0)
+  lastSyncedAt    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model WhatsAppTemplate {
+  id          String   @id @default(cuid())
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  name        String
+  category    String   // UTILITY, MARKETING, AUTHENTICATION
+  language    String   @default("en_US")
+  header      String?
+  body        String   @db.Text
+  footer      String?
+  buttons     String?  @db.Text // JSON
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  metaTemplateId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  eventType String
+  eventData String   @db.Text // JSON
+  timestamp DateTime @default(now())
+}
+
+model ApiUsageLog {
+  id          String   @id @default(cuid())
+  serviceId   String?
+  apiName     String
+  endpoint    String
+  method      String
+  statusCode  Int?
+  responseTime Int?    // ms
+  requestData String?  @db.Text
+  responseData String? @db.Text
+  error       String?
+  createdAt   DateTime @default(now())
+}
