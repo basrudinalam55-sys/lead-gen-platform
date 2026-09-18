@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
   images: {
     domains: ['images.unsplash.com', 'source.unsplash.com', 'image.pollinations.ai', 'api.pexels.com'],
     formats: ['image/avif', 'image/webp'],
