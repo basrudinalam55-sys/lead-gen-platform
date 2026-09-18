@@ -7,59 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ServiceType {
-  GOOGLE_MAPS_LEAD_GEN
-  COMPETITOR_PRICE_MONITORING
-  SOCIAL_MEDIA_CONTENT_PIPELINE
-  WHATSAPP_AUTOMATION
-  LOCAL_SEO_GMB
-}
-
-enum ServiceStatus {
-  ACTIVE
-  PAUSED
-  COMPLETED
-  PENDING
-}
-
-enum LeadStatus {
-  NEW
-  CONTACTED
-  QUALIFIED
-  DEMO_SCHEDULED
-  DEMO_COMPLETED
-  PROPOSAL_SENT
-  NEGOTIATING
-  CLOSED_WON
-  CLOSED_LOST
-}
-
-enum OutreachChannel {
-  EMAIL
-  WHATSAPP
-  INSTAGRAM_DM
-  PHONE
-  IN_PERSON
-  LINKEDIN
-}
-
-enum TaskType {
-  LEAD_RESEARCH
-  OUTREACH
-  DEMO
-  FOLLOW_UP
-  PROPOSAL
-  ONBOARDING
-  CONTENT_CREATION
-  REPORTING
-}
-
-enum TaskStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
+// Enums converted to String fields for SQLite compatibility
+// Use String with validation in application code
 
 model User {
   id            String    @id @default(cuid())
@@ -83,12 +32,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -115,19 +64,24 @@ model VerificationToken {
 model Service {
   id              String        @id @default(cuid())
   name            String
-  type            ServiceType
-  description     String        @db.Text
+  type            String        // GOOGLE_MAPS_LEAD_GEN, COMPETITOR_PRICE_MONITORING, SOCIAL_MEDIA_CONTENT_PIPELINE, WHATSAPP_AUTOMATION, LOCAL_SEO_GMB
+  description     String        // @db.Text removed
   priceSetup      Int           @default(0)
   priceMonthly    Int           @default(0)
   currency        String        @default("NPR")
-  status          ServiceStatus @default(ACTIVE)
-  features        String[]
-  targetIndustries String[]
-  apiSources      String[]
+  status          String        @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, PENDING
+  features        String        // JSON stringified array
+  targetIndustries String       // JSON stringified array
+  apiSources      String        // JSON stringified array
   userId          String
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   leads           Lead[]
   tasks           Task[]
+  competitorPrices CompetitorPrice[]
+  socialContent   SocialContent[]
+  gmbProfiles     GMBProfile[]
+  whatsappTemplates WhatsAppTemplate[]
+  analyticsEvents AnalyticsEvent[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 }
@@ -149,10 +103,10 @@ model Lead {
   industry        String?
   businessType    String?
   source          String      @default("MANUAL")
-  status          LeadStatus  @default(NEW)
+  status          String      @default("NEW") // NEW, CONTACTED, QUALIFIED, DEMO_SCHEDULED, DEMO_COMPLETED, PROPOSAL_SENT, NEGOTIATING, CLOSED_WON, CLOSED_LOST
   score           Int         @default(0)
-  tags            String[]
-  notes           String?     @db.Text
+  tags            String      // JSON stringified array
+  notes           String?
   serviceId       String
   service         Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   outreachLogs    OutreachLog[]
@@ -167,11 +121,11 @@ model OutreachLog {
   id          String           @id @default(cuid())
   leadId      String
   lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  channel     OutreachChannel
+  channel     String           // EMAIL, WHATSAPP, INSTAGRAM_DM, PHONE, IN_PERSON, LINKEDIN
   direction   String           // INBOUND / OUTBOUND
   subject     String?
-  content     String           @db.Text
-  metadata    String?          @db.Text // JSON
+  content     String
+  metadata    String?          // JSON
   sentAt      DateTime         @default(now())
   deliveredAt DateTime?
   readAt      DateTime?
@@ -181,9 +135,9 @@ model OutreachLog {
 model Task {
   id          String      @id @default(cuid())
   title       String
-  description String?     @db.Text
-  type        TaskType
-  status      TaskStatus  @default(PENDING)
+  description String?
+  type        String      // LEAD_RESEARCH, OUTREACH, DEMO, FOLLOW_UP, PROPOSAL, ONBOARDING, CONTENT_CREATION, REPORTING
+  status      String      @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
   priority    Int         @default(0)
   dueDate     DateTime?
   completedAt DateTime?
@@ -195,7 +149,7 @@ model Task {
   service     Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   leadId      String?
   lead        Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  metadata    String?     @db.Text // JSON
+  metadata    String?     // JSON
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }
@@ -210,7 +164,7 @@ model CompetitorPrice {
   price         Float
   currency      String   @default("NPR")
   availability  String?
-  metadata      String?  @db.Text
+  metadata      String?  // JSON
   scrapedAt     DateTime @default(now())
   createdAt     DateTime @default(now())
 }
@@ -221,14 +175,14 @@ model SocialContent {
   service       Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   platform      String   // INSTAGRAM, FACEBOOK, LINKEDIN, TWITTER, TIKTOK
   contentType   String   // POST, STORY, REEL, CAROUSEL
-  caption       String?  @db.Text
-  mediaUrls     String[] // JSON array
-  hashtags      String[]
+  caption       String?
+  mediaUrls     String   // JSON stringified array
+  hashtags      String   // JSON stringified array
   scheduledAt   DateTime
   publishedAt   DateTime?
   status        String   @default("DRAFT") // DRAFT, SCHEDULED, PUBLISHED, FAILED
-  engagement    String?  @db.Text // JSON
-  metadata      String?  @db.Text
+  engagement    String?  // JSON
+  metadata      String?  // JSON
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -247,8 +201,8 @@ model GMBProfile {
   reviewCount     Int?
   latitude        Float?
   longitude       Float?
-  hours           String?  @db.Text // JSON
-  photos          String[] // JSON array
+  hours           String?  // JSON
+  photos          String   // JSON stringified array
   verified        Boolean  @default(false)
   optimizationScore Int    @default(0)
   lastSyncedAt    DateTime?
@@ -264,9 +218,9 @@ model WhatsAppTemplate {
   category    String   // UTILITY, MARKETING, AUTHENTICATION
   language    String   @default("en_US")
   header      String?
-  body        String   @db.Text
+  body        String
   footer      String?
-  buttons     String?  @db.Text // JSON
+  buttons     String?  // JSON
   status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
   metaTemplateId String?
   createdAt   DateTime @default(now())
@@ -280,7 +234,7 @@ model AnalyticsEvent {
   leadId    String?
   lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
   eventType String
-  eventData String   @db.Text // JSON
+  eventData String   // JSON
   timestamp DateTime @default(now())
 }
 
@@ -292,8 +246,8 @@ model ApiUsageLog {
   method      String
   statusCode  Int?
   responseTime Int?    // ms
-  requestData String?  @db.Text
-  responseData String? @db.Text
+  requestData String?  // JSON
+  responseData String? // JSON
   error       String?
   createdAt   DateTime @default(now())
 }
